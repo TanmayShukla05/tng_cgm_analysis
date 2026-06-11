@@ -253,40 +253,18 @@ def process_all_galaxies(selected_ids, selected_orig, mw_catalog, hvc_catalog, h
                         latitudes, longitudes, cache_file=None, **kwargs):
     """
     Process all galaxies in the sample.
-    
-    Parameters
-    ----------
-    selected_ids : array_like
-        Subhalo IDs to process
-    selected_orig : array_like
-        Original catalog indices
-    mw_catalog : h5py.File
-        MW catalog
-    hvc_catalog : h5py.File
-        HVC catalog
-    h : float
-        Hubble parameter
-    latitudes : array_like
-        Latitude grid
-    longitudes : array_like
-        Longitude grid
-    cache_file : str, optional
-        Cache file path
-    **kwargs : dict
-        Additional arguments for process_single_galaxy
-        
-    Returns
-    -------
-    results : dict
-        Processing results for all galaxies
     """
     if cache_file and os.path.exists(cache_file):
         print(f"Loading cached results from '{cache_file}'...")
-        with open(cache_file, 'rb') as f:
-            return pickle.load(f)
+        try:
+            with open(cache_file, 'rb') as f:
+                return pickle.load(f)
+        except (ModuleNotFoundError, AttributeError, ImportError) as e:
+            print(f"⚠ Warning: Cache file incompatible ({e})")
+            print(f"  Deleting cache and reprocessing...")
+            os.remove(cache_file)
     
-    print(f"Processing {len(selected_ids)} galaxies...")
-    
+    print(f"Processing {len(selected_ids)} galaxies...")    
     all_galaxy_dms = {lat: [] for lat in latitudes}
     all_galaxy_dms_lon = {lon: [] for lon in longitudes}
     all_temp_binned = []
