@@ -6,6 +6,7 @@ from TNG simulations.
 
 __version__ = "1.0.0"
 
+# Import all modules for easy access
 from . import config
 from . import constants
 from . import coordinates
