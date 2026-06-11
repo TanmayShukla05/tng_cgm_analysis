@@ -6,7 +6,7 @@ import math
 import numpy as np
 from . import config
 
-def aggregate(data, method=None):
+def aggregate(data, method=None, axis=None):
     """
     Aggregate data using specified method.
     
@@ -26,9 +26,9 @@ def aggregate(data, method=None):
         method = config.get_aggregation_method()
     
     if method == 'median':
-        return np.median(data)
+        return np.median(data, axis=axis)
     elif method == 'mean':
-        return np.mean(data)
+        return np.mean(data, axis=axis)
     else:
         raise ValueError(f"Unknown aggregation method: {method}")
 
