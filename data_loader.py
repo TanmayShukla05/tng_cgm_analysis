@@ -184,3 +184,55 @@ def load_gas_data(cutout_path):
         }
     
     return gas_data
+
+def find_catalog_key(catalog, hints):
+    """
+    Return the first key in *catalog* whose name contains any of the
+    case-insensitive *hints*.
+
+    Parameters
+    ----------
+    catalog : h5py.File or dict-like
+    hints : list of str
+
+    Returns
+    -------
+    str or None
+    """
+    for k in catalog.keys():
+        for hint in hints:
+            if hint.lower() in k.lower():
+                return k
+    return None
+
+
+def stack_dm_arrays(all_galaxy_dms, all_galaxy_dms_lon):
+    """
+    Convert the dictionary-of-lists format returned by
+    ``process_all_galaxies`` into contiguous NumPy arrays suitable for
+    boolean-mask indexing.
+
+    Parameters
+    ----------
+    all_galaxy_dms : dict  {latitude: list_of_arrays}
+    all_galaxy_dms_lon : dict  {longitude: list_of_arrays}
+
+    Returns
+    -------
+    all_dms_arr : ndarray, shape (N_gal, N_lat, N_lon)
+    all_dms_lon_arr : ndarray, shape (N_gal, N_lon_keys, N_lat)
+    lat_keys : list (sorted)
+    lon_keys : list (sorted)
+    """
+    import numpy as np
+
+    lat_keys = sorted(all_galaxy_dms.keys())
+    lon_keys = sorted(all_galaxy_dms_lon.keys())
+
+    all_dms_arr = np.stack(
+        [all_galaxy_dms[lat] for lat in lat_keys], axis=1
+    )
+    all_dms_lon_arr = np.stack(
+        [all_galaxy_dms_lon[lon] for lon in lon_keys], axis=1
+    )
+    return all_dms_arr, all_dms_lon_arr, lat_keys, lon_keys

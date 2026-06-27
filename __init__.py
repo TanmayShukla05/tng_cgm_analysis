@@ -20,6 +20,7 @@ from . import statistics
 from . import plotting
 from . import healpix_analysis
 from . import models
+from . import cache_manager
 
 __all__ = [
     'config',
