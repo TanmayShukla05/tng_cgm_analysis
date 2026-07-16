@@ -12,6 +12,9 @@ IDS_HDF5_PATH = 'ids_MW.hdf5'
 # Simulation parameters
 SNAP = 99
 
+DISK_RADIUS_MULT = 5.0   # disk_radius = DISK_RADIUS_MULT * DiskScaleLength
+DISK_HEIGHT_MULT = 1.0   # disk_height = DISK_HEIGHT_MULT * DiskScaleHeightThin
+
 # Analysis parameters
 N_PTS_LOS = 500
 APPLY_TWO_PHASE = True
