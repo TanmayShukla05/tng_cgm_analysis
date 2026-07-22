@@ -13,7 +13,7 @@ IDS_HDF5_PATH = 'ids_MW.hdf5'
 SNAP = 99
 
 DISK_RADIUS_MULT = 5.0   # disk_radius = DISK_RADIUS_MULT * DiskScaleLength
-DISK_HEIGHT_MULT = 1.0   # disk_height = DISK_HEIGHT_MULT * DiskScaleHeightThin
+DISK_HEIGHT_MULT = 3.0   # disk_height = DISK_HEIGHT_MULT * DiskScaleHeightThin
 
 # Analysis parameters
 N_PTS_LOS = 500
