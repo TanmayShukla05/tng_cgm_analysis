@@ -87,21 +87,43 @@ def load_header(basepath, snap):
 def find_catalog_key(catalog, hints):
     """
     Find catalog key matching hints.
-    
+
     Parameters
     ----------
     catalog : h5py.File
         Catalog file
     hints : list
-        List of hint strings
-        
+        List of hint strings, in PRIORITY ORDER (most-preferred first).
+
     Returns
     -------
     key : str or None
         Matching key name
+
+    Notes
+    -----
+    BUGFIX (see TNG_CGM_Analysis_part1_fixed notebook, "SETUP" cell):
+    the original implementation looped ``for k in catalog.keys(): for
+    hint in hints:`` and returned on the first catalog key (in
+    whatever arbitrary order h5py/dict iteration gives) that matched
+    ANY hint -- not the first HINT in priority order. That let a call
+    such as ``find_catalog_key(mw_catalog, ['Group_M_Crit200', 'M200c',
+    'HaloMass', 'SubhaloMass'])`` silently return 'SubhaloMass' (the
+    much smaller, bound-only subhalo mass) instead of the intended
+    'Group_M_Crit200', whenever 'SubhaloMass' happened to come first in
+    the catalog's key order -- which is what was producing
+    M_CGM,gas/M_halo > 1 in the CGM gas mass fraction histogram (gas
+    mass out to R_vir divided by a much smaller bound-mass
+    denominator for at least some galaxies).
+
+    Fixed here by swapping the loop order (hints outer, keys inner),
+    so the first hint in priority order that matches ANY key wins,
+    rather than the first key (in arbitrary order) that matches ANY
+    hint.
     """
-    for k in catalog.keys():
-        for hint in hints:
+    keys = list(catalog.keys())
+    for hint in hints:
+        for k in keys:
             if hint.lower() in k.lower():
                 return k
     return None
