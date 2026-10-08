@@ -27,7 +27,7 @@ import numpy as np
 T_BINS = np.logspace(3, 8, 5)
 
 # Latitude and longitude grids
-LATITUDES = np.arange(-89, 89, 1)
+LATITUDES = np.arange(-89, 90, 1)   # b = -89..+89 (179 values, includes the north pole)
 LONGITUDES = np.arange(0, 360, 1)
 
 # HEALPix parameters

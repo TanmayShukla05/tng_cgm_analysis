@@ -19,6 +19,28 @@ from .geometry import rotation_matrix_to_z
 from .los import construct_diskless_LOS
 from .statistics import aggregate
 
+def lat_area_weights(lats):
+    """Solid-angle weight of each latitude row of a regular (l, b) grid.
+
+    Cell edges are at b +- 0.5 deg (the outermost rows extend to the poles);
+    weight is proportional to sin(b_hi) - sin(b_lo), normalised to mean 1.
+    """
+    lats = np.asarray(lats, dtype=float)
+    lo, hi = lats - 0.5, lats + 0.5
+    lo[0] = -90.0 if lats[0] <= -89 else lo[0]
+    hi[-1] = 90.0 if lats[-1] >= 89 else hi[-1]
+    area = np.sin(np.radians(hi)) - np.sin(np.radians(lo))
+    return area / area.mean()
+
+
+def _wmedian(x, w):
+    """Weighted median (reduces to np.median for equal weights)."""
+    o = np.argsort(x, kind='stable')
+    x, w = x[o], w[o]
+    c = np.cumsum(w) - 0.5 * w
+    return float(np.interp(0.5 * w.sum(), c, x))
+
+
 def process_single_galaxy(halo_id, orig_idx, mw_catalog, hvc_catalog, h,
                          latitudes, longitudes, snap=99,
                          n_pts=500, apply_two_phase=True, max_dist=None,
@@ -132,7 +154,7 @@ def process_single_galaxy(halo_id, orig_idx, mw_catalog, hvc_catalog, h,
             }
             continue
         
-        dl = np.diff(np.concatenate([[0.0], r_v]))
+        dl = np.diff(np.concatenate([[r_v[0]], r_v]))  # DM sum starts at the disk boundary r_min
         density_v = gas_density[cidx_v]
         xe_v = gas_xe[cidx_v]
         u_v = gas_u[cidx_v]
@@ -357,6 +379,8 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
     r_max_cu = r200_kpc * h
 
     gas_tree = cKDTree(gas_coords)
+    # solid-angle weights of the latitude rows (regular grid over-counts the poles)
+    LAT_AREA_W = {float(b): float(w) for b, w in zip(latitudes, lat_area_weights(latitudes))}
 
     all_LOS, all_r, key_order = [], [], []
     for lat in latitudes:
@@ -390,7 +414,7 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
             LOSes_dict[key] = {'dm': 0.0, 'temp': np.array([]), 'dm_arr': np.array([])}
             continue
 
-        dl = np.diff(np.concatenate([[0.0], r_v]))
+        dl = np.diff(np.concatenate([[r_v[0]], r_v]))  # DM sum starts at the disk boundary r_min
         density_v = gas_density[cidx_v]
         xe_v = gas_xe[cidx_v]
         u_v = gas_u[cidx_v]
@@ -422,7 +446,7 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
     T_BINS = config.T_BINS
     nonempty = [k for k in LOSes_dict if len(LOSes_dict[k]['dm_arr']) > 0]
     temp_all = np.concatenate([LOSes_dict[k]['temp'] for k in nonempty]) if nonempty else np.array([])
-    dm_arr_all = np.concatenate([LOSes_dict[k]['dm_arr'] for k in nonempty]) if nonempty else np.array([])
+    dm_arr_all = np.concatenate([LOSes_dict[k]['dm_arr'] * LAT_AREA_W[k[0]] for k in nonempty]) if nonempty else np.array([])
 
     temp_stat = None
     total_DM_gal = None
@@ -430,7 +454,7 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
         total_DM_gal = np.sum(dm_arr_all)
         temp_stat, _, _ = _scipy_stats.binned_statistic(temp_all, dm_arr_all, statistic='sum', bins=T_BINS)
 
-    gal_r_norm, gal_ne, gal_temp = [], [], []
+    gal_r_norm, gal_ne, gal_temp, gal_w = [], [], [], []
     cursor2 = 0
     for i in range(len(all_LOS)):
         sl = slice(cursor2, cursor2 + n_pts)
@@ -453,14 +477,16 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
         gal_r_norm.extend(r_v[filt] / r_max_cu)
         gal_ne.extend(ne_v[filt])
         gal_temp.extend(temp_v_ne[filt])
+        gal_w.extend(np.full(int(filt.sum()), LAT_AREA_W[key_order[i][0]]))
 
     gal_r_norm = np.array(gal_r_norm)
     gal_ne = np.array(gal_ne)
     gal_temp = np.array(gal_temp)
+    gal_w = np.array(gal_w)
 
     x_common = np.logspace(-2, 0.5, n_bins_ne)
 
-    def _interp_ne_profile(r_norm, ne):
+    def _interp_ne_profile(r_norm, ne, w):
         """Median n_e(r/R200) profile on the shared x_common grid, log-spaced
         bins built from this subset's own r-range."""
         if len(ne) == 0:
@@ -474,14 +500,14 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
         for b in range(n_bins_ne):
             mask = idx_digit == b
             if np.sum(mask) >= 3:
-                ne_med_prof[b] = np.median(ne[mask])
+                ne_med_prof[b] = _wmedian(ne[mask], w[mask])
         valid_ne = np.isfinite(ne_med_prof) & (ne_med_prof > 0)
         if valid_ne.sum() < 3:
             return None
         return np.interp(x_common, bin_ctrs[valid_ne], ne_med_prof[valid_ne],
                           left=np.nan, right=np.nan)
 
-    interp_prof = _interp_ne_profile(gal_r_norm, gal_ne)
+    interp_prof = _interp_ne_profile(gal_r_norm, gal_ne, gal_w)
 
     # n_e profile split by temperature phase (config.T_BINS)
     n_phases = len(config.T_BINS) - 1
@@ -490,7 +516,7 @@ def process_single_galaxy_fitted(il, basepath, snap, sid, geom, r200_kpc, sub_po
         phase_idx = np.digitize(gal_temp, config.T_BINS) - 1
         for p in range(n_phases):
             pm = phase_idx == p
-            prof_p = _interp_ne_profile(gal_r_norm[pm], gal_ne[pm])
+            prof_p = _interp_ne_profile(gal_r_norm[pm], gal_ne[pm], gal_w[pm])
             if prof_p is not None:
                 interp_prof_by_tbin[p] = prof_p
 
